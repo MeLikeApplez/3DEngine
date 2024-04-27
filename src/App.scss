@@ -1,0 +1,70 @@
+.App {
+    width: 100%;
+    height: 100%;
+
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    .stats {
+        position: absolute;
+        top: 0;
+        left: 0;
+
+        user-select: none;
+        -webkit-user-select: none;
+
+        color: white;
+        font-weight: bold;
+    }
+
+    canvas {
+        width: 100%;
+        height: 100%;
+
+        touch-action: none;
+    }
+
+    .error-screen {
+        width: 100%;
+        height: 100%;
+
+        display: flex;
+        flex-direction: column;
+        // justify-content: center;
+        // align-items: center;
+
+        position: fixed;
+
+        font-family: monospace;
+        font-size: 24px;
+
+        color: white;
+        background-color: rgb(80, 50, 50, 0.5);
+    
+        .message {
+            margin: 12px;
+        }
+
+        header {
+            border-radius: 4px;
+            padding: 12px;
+            margin: 12px;
+
+            display: flex;
+            justify-content: space-between;
+
+            background-color: rgb(100, 40, 40);
+        
+            .exit {
+                text-decoration: underline;
+
+                color: rgb(50, 150, 200);
+
+                cursor: pointer;
+            }
+        }
+    }
+}
