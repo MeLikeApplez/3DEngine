@@ -5,6 +5,7 @@ import Color from '../Utils/Color'
 import Vector3 from '../Math/Vector3'
 import Euler from '../Math/Euler'
 import TextureLoader from '../Texture/TextureLoader'
+import Matrix4 from '../Math/Matrix4'
 
 export default class Mesh {
     /**
@@ -18,24 +19,28 @@ export default class Mesh {
         this.position = new Vector3(0, 0, 0)
         this.scale = new Vector3(1, 1, 1)
         this.rotation = new Euler(0, 0, 0)
-        this.centerOffset = new Vector3(0, 0, 0)
 
-        this.ready = false
+        this.matrix = new Matrix4()
+        this.matrixAutoUpdate = true
+
+        // this.ready = false
 
         this.isMesh = true
         this.isInstancedMesh = false
 
         this.uuid = uuid.v4()
         this._vertexArray = null
-
-        this.updateCenterOffset()
+        this._matrixBuffer = null
     }
 
     /**
      * @param {WebGL2RenderingContext} gl 
      */
     dispose(gl) {
-        if(this._vertexArray === null || !gl) return false
+        if(!gl) return false
+
+        gl.deleteBuffer(this._matrixBuffer)
+        this._matrixBuffer= null
 
         gl.deleteVertexArray(this._vertexArray)
         this._vertexArray = null
@@ -46,42 +51,71 @@ export default class Mesh {
         return true
     }
 
-    updateCenterOffset() {
-        let cx = 0
-        let cy = 0
-        let cz = 0
-        
-        for(let i = 0; i < this.geometry.vertices.length; i+=3) {
-            const x = this.scale.x * this.geometry.vertices[i + 0]
-            const y = this.scale.y * this.geometry.vertices[i + 1]
-            const z = this.scale.z * this.geometry.vertices[i + 2]
-
-            cx += x
-            cy += y
-            cz += z
-        }
-
-        const pointsLength = this.geometry.vertices.length / 3
-        this.centerOffset.set(cx / pointsLength, cy / pointsLength, cz / pointsLength)
-
-        return this
-    }
-
     /**
      * @param {WebGL2RenderingContext} gl 
      * @param {WebGLProgram} program 
      */
     update(gl, program) {
-        if(!this.geometry || !this.material) throw Error('Cannot initialize mesh! Geometry or Material is missing!')   
+        if(!this.geometry || !this.material) throw Error('Cannot initialize mesh! Geometry or Material is missing!')
+
+        gl.deleteVertexArray(this._vertexArray)
+        gl.deleteBuffer(this._matrixBuffer)
+
+        this.updateMatrix()
 
         // VAO's only work on vertex buffers / color vertex buffers, NOT TEXTURES
         this._vertexArray = gl.createVertexArray()
         gl.bindVertexArray(this._vertexArray)
+
+        this._matrixBuffer = gl.createBuffer()
+
+        this.geometry.load(gl, program)
+        this.material.load(gl, program, this.geometry)
+
+        const stride = this.matrix.elements.length * 4
+        const vertexMatrixLocation = gl.getAttribLocation(program, 'meshMatrix')
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._matrixBuffer)
+        gl.bufferData(gl.ARRAY_BUFFER, this.matrix.elements, gl.STATIC_DRAW)
         
-        this.geometry.initialize(gl, program)
-        this.material.initialize(gl, program, this.geometry)
+        gl.vertexAttribPointer(vertexMatrixLocation, 4, gl.FLOAT, false, stride, 0)
+        gl.vertexAttribPointer(vertexMatrixLocation + 1, 4, gl.FLOAT, false, stride, 16)
+        gl.vertexAttribPointer(vertexMatrixLocation + 2, 4, gl.FLOAT, false, stride, 32)
+        gl.vertexAttribPointer(vertexMatrixLocation + 3, 4, gl.FLOAT, false, stride, 48)
+        
+        gl.vertexAttribDivisor(vertexMatrixLocation, 1)
+        gl.vertexAttribDivisor(vertexMatrixLocation + 1, 1)
+        gl.vertexAttribDivisor(vertexMatrixLocation + 2, 1)
+        gl.vertexAttribDivisor(vertexMatrixLocation + 3, 1)
+
+        gl.enableVertexAttribArray(vertexMatrixLocation)
+        gl.enableVertexAttribArray(vertexMatrixLocation + 1)
+        gl.enableVertexAttribArray(vertexMatrixLocation + 2)
+        gl.enableVertexAttribArray(vertexMatrixLocation + 3)
 
         gl.bindVertexArray(null)
+    }
+
+    updateMatrix() {
+        this.matrix.makeRotationFromEuler(this.rotation)
+
+        // https://stackoverflow.com/a/37281018/13159492
+        // Storing positional data IN GLSL is row order NOT column
+        this.matrix.elements[12] = this.position.x
+        this.matrix.elements[13] = this.position.y
+        this.matrix.elements[14] = this.position.z
+
+        this.matrix.elements[0] *= this.scale.x
+        this.matrix.elements[1] *= this.scale.x
+        this.matrix.elements[2] *= this.scale.x
+        
+        this.matrix.elements[4] *= this.scale.y
+        this.matrix.elements[5] *= this.scale.y
+        this.matrix.elements[6] *= this.scale.y
+        
+        this.matrix.elements[8] *= this.scale.z
+        this.matrix.elements[9] *= this.scale.z
+        this.matrix.elements[10] *= this.scale.z
     }
 
     /**
@@ -90,6 +124,11 @@ export default class Mesh {
      */
     render(gl, program) {
         gl.bindVertexArray(this._vertexArray)
+
+        if(this.matrixAutoUpdate) {
+            this.updateMatrix()
+        }
+        
         this.material.renderTexture(gl, program, this.geometry)
         
         gl.drawArrays(gl.TRIANGLES, 0, this.geometry.vertices.length)
@@ -122,28 +161,29 @@ export class BufferMeshMaterial {
 
     /**
      * @param {BufferGeometry} geometry 
+     * @param {Color | Color[]} color 
      */
-    setColorVertices(geometry) {
-        this.colorVertices = new Uint8Array(geometry.vertices.length)
+    createColorVertices(geometry, color) {
+        const colorVertices = new Uint8Array(geometry.vertices.length)
 
-        if(Array.isArray(this.color)) {
+        if(Array.isArray(color)) {
             // colors * per triangle vertex
-            const faceLength = this.color.length * geometry.trianglesPerFace
+            const faceLength = color.length * geometry.trianglesPerFace
 
             let faceCount = 0
             let colorIndex = 0
             for(let i = 0; i < geometry.vertices.length; i+=3) {
                 if(faceCount >= faceLength) {
-                    this.colorVertices[i] = 0
-                    this.colorVertices[i + 1] = 0
-                    this.colorVertices[i + 2] = 0
+                    colorVertices[i] = 0
+                    colorVertices[i + 1] = 0
+                    colorVertices[i + 2] = 0
 
                     continue
                 }
 
-                this.colorVertices[i] = this.color[colorIndex].value[0]
-                this.colorVertices[i + 1] = this.color[colorIndex].value[1]
-                this.colorVertices[i + 2] = this.color[colorIndex].value[2]
+                colorVertices[i] = color[colorIndex].value[0]
+                colorVertices[i + 1] = color[colorIndex].value[1]
+                colorVertices[i + 2] = color[colorIndex].value[2]
 
                 faceCount++
 
@@ -152,15 +192,24 @@ export class BufferMeshMaterial {
                 }
 
             }
-
-            return
-        } else if(this.color) {
+        } else if(color) {
             for(let i = 0; i < geometry.vertices.length; i+=3) {
-                this.colorVertices[i] = this.color.value[0]
-                this.colorVertices[i + 1] = this.color.value[1]
-                this.colorVertices[i + 2] = this.color.value[2]
+                colorVertices[i] = color.value[0]
+                colorVertices[i + 1] = color.value[1]
+                colorVertices[i + 2] = color.value[2]
             }
         }
+
+        return colorVertices
+    }
+
+    /**
+     * @param {BufferGeometry} geometry 
+     */
+    setColorVertices(geometry) {
+        this.colorVertices = this.createColorVertices(geometry, this.color)
+
+        return this.colorVertices
     }
     
     /**
@@ -266,7 +315,9 @@ export class BufferMeshMaterial {
      * @param {WebGLProgram} program 
      * @param {BufferGeometry} geometry 
      */
-    initialize(gl, program, geometry) {
+    load(gl, program, geometry) {
+        this.dispose(gl)
+
         if(this.colorVertices.length <= 0) {
             this.setColorVertices(geometry)
         }
@@ -314,7 +365,7 @@ export class BufferMeshMaterial {
         gl.vertexAttribPointer(this._textureAttribute, 2, gl.FLOAT, false, 0, 0)
         gl.enableVertexAttribArray(this._textureAttribute)
         
-        if(this.texture) {
+        if(this.texture && this.texture.ready) {
             gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
     
             gl.bindTexture(gl.TEXTURE_2D, this._textureBufferImg)

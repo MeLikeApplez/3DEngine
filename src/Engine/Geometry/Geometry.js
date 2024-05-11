@@ -1,20 +1,54 @@
 export default class BufferGeometry {
     /**
      * @param {Number} trianglesPerFace 
+     * @param {Boolean} centerToWorldSpace 
      * @param {Array} data 
      */
-    constructor(trianglesPerFace, data=[]) {
-        this.trianglesPerFace = trianglesPerFace
+    constructor(trianglesPerFace, centerToWorldSpace, data=[]) {
         this.vertices = new Float32Array(data)
+
+        this.trianglesPerFace = trianglesPerFace
 
         this._buffer = null
         this._attribute = null
+
+        if(centerToWorldSpace) this.setVerticesToWorldCenter()
+    }
+
+    setVerticesToWorldCenter() {
+        let cx = 0
+        let cy = 0
+        let cz = 0
+        
+        for(let i = 0; i < this.vertices.length; i+=3) {
+            const x = this.vertices[i + 0]
+            const y = this.vertices[i + 1]
+            const z = this.vertices[i + 2]
+
+            cx += x
+            cy += y
+            cz += z
+        }
+
+        const pointsLength = this.vertices.length / 3
+
+        cx = -cx / pointsLength
+        cy = -cy / pointsLength
+        cz = -cz / pointsLength
+
+        for(let i = 0; i < this.vertices.length; i+=3) {
+            this.vertices[i + 0] += cx
+            this.vertices[i + 1] += cy
+            this.vertices[i + 2] += cz
+        }
     }
 
     /**
      * @param {WebGL2RenderingContext} gl 
      */
     setBuffer(gl) {
+        this.dispose(gl)
+
         const buffer = gl.createBuffer()
 
         if(!buffer) throw Error('Failed to create static buffer!')
@@ -87,7 +121,7 @@ export default class BufferGeometry {
      * @param {WebGL2RenderingContext} gl 
      * @param {WebGLProgram} program 
      */
-    initialize(gl, program) {
+    load(gl, program) {
         this.setBuffer(gl)
 
         this._attribute = gl.getAttribLocation(program, 'vertexPosition')

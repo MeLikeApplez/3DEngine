@@ -6,8 +6,8 @@ export default class BoxGeometry extends BufferGeometry {
      * @param {Number} height 
      * @param {Number} depth 
      */
-    constructor(width=1, height=1, depth=1) {
-        super(6, [
+    constructor(width, height, depth) {
+        const vertices = [
             // front
             0.0, 0.0, 0.0,
             0.0, 1.0, 0.0,
@@ -25,6 +25,7 @@ export default class BoxGeometry extends BufferGeometry {
             1.0, 0.0, 1.0,
             1.0, 1.0, 1.0,
             0.0, 1.0, 1.0,
+
             // top
             0.0, 0.0, 0.0,
             0.0, 0.0, 1.0,
@@ -33,6 +34,7 @@ export default class BoxGeometry extends BufferGeometry {
             1.0, 0.0, 0.0,
             1.0, 0.0, 1.0,
             0.0, 0.0, 1.0,
+
             //bottom
             0.0, 1.0, 0.0,
             0.0, 1.0, 1.0,
@@ -41,6 +43,7 @@ export default class BoxGeometry extends BufferGeometry {
             1.0, 1.0, 0.0,
             1.0, 1.0, 1.0,
             0.0, 1.0, 1.0,
+
             // right
             1.0, 0.0, 0.0,
             1.0, 1.0, 0.0,
@@ -49,6 +52,7 @@ export default class BoxGeometry extends BufferGeometry {
             1.0, 0.0, 1.0,
             1.0, 1.0, 1.0,
             1.0, 1.0, 0.0,
+            
             // left
             0.0, 0.0, 0.0,
             0.0, 1.0, 0.0,
@@ -57,6 +61,14 @@ export default class BoxGeometry extends BufferGeometry {
             0.0, 0.0, 1.0,
             0.0, 1.0, 1.0,
             0.0, 1.0, 0.0,
-        ])
+        ]
+        
+        for(let i = 0; i < vertices.length; i+=3) {
+            vertices[i] *= width
+            vertices[i + 1] *= height
+            vertices[i + 2] *= depth
+        }
+
+        super(6, true, vertices)
     }
 }

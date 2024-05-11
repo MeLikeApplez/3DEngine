@@ -1,8 +1,14 @@
 import Matrix4 from '../../Math/Matrix4'
+import Vector3 from '../../Math/Vector3'
+import Vector4 from '../../Math/Vector4'
 import Color from '../../Utils/Color'
 
 import Mesh from '../Mesh'
 import InstancedBuffer from './InstancedBuffer'
+
+// stride => (4 bytes per float)
+// first row => (9 floats) => (9 floats * 4 bytes) => 36 stride
+const STRIDE_FLOAT_BYTES = 4
 
 export default class InstancedMesh extends Mesh {
     /**
@@ -17,9 +23,32 @@ export default class InstancedMesh extends Mesh {
         this.isInstancedMesh = true
 
         this.count = count
-        this.instanceColor = new InstancedBuffer(geometry.vertices, count)
-        this.instanceMatrix = new InstancedBuffer(material.colorVertices, count)
+        /**
+         * @type {ArrayBuffer[3]}
+         */
+        this.instanceColor = Array(count)
+        /**
+         * @type {Matrix4[]}
+         */
+        this.instanceMatrices = Array(count)
 
+        this._transformBuffer = null
+    
+        this.initialize()
+    }
+
+    /**
+     * @param {WebGL2RenderingContext} gl 
+     */
+    dispose(gl) {
+        if(!gl) return false
+        
+        super.dispose(gl)
+
+        gl.deleteBuffer(this._transformBuffer)
+        this._transformBuffer = null
+
+        return true
     }
 
     /**
@@ -54,6 +83,19 @@ export default class InstancedMesh extends Mesh {
 
     }
 
+    initialize() {
+        this.instanceColor = Array(this.count)
+        this.instanceMatrices = Array(this.count)
+
+        for(let i = 0; i < this.count; i++) {
+            const identityMatrix = new Matrix4()
+            const defaultColor = new Float32Array(3)
+
+            this.instanceMatrices[i] = identityMatrix
+            this.instanceColor[i] = defaultColor
+        }
+    }
+
     /**
      * @param {WebGL2RenderingContext} gl 
      * @param {WebGLProgram} program 
@@ -65,37 +107,52 @@ export default class InstancedMesh extends Mesh {
         this._vertexArray = gl.createVertexArray()
         gl.bindVertexArray(this._vertexArray)
 
+        this.geometry.load(gl, program)
+        this.material.load(gl, program, this.geometry)
 
-        this.geometry.initialize(gl, program)
+        // matrix + color
+        const rowSize = 16 + 3
+        const stride = rowSize * STRIDE_FLOAT_BYTES
 
-        // stride => (4 bytes per float)
-        // first row => (9 floats) => (9 float * 4 bytes) => 36 stride
-        const stride = 9 * 4
+        gl.deleteBuffer(this._transformBuffer)
 
-        const transformBuffer = gl.createBuffer()
-        const transformData = new Float32Array([
-            // position     scale    color
-               0, 0, -2,        1, 1, 1,    255, 0, 0, 
-               0, 0, -4,        1, 1, 1,    0, 0, 255, 
-        ])
+        this._transformBuffer = gl.createBuffer()
+        const transformData = new Float32Array(rowSize * this.count)
 
-        const colorAttribute = gl.getAttribLocation(program, 'vertexColor')
+        for(let i = 0; i < this.count; i++) {
+            const transformDataIndex = rowSize * i
+            const matrix = this.instanceMatrices[i]
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, transformBuffer)
+            transformData.set(matrix.elements, transformDataIndex)
+            transformData.set(this.instanceColor[i], transformDataIndex + matrix.elements.length)
+        }
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._transformBuffer)
         gl.bufferData(gl.ARRAY_BUFFER, transformData, gl.STATIC_DRAW)
 
+        const vertexMatrixLocation = gl.getAttribLocation(program, 'meshMatrix')
+
+        gl.vertexAttribPointer(vertexMatrixLocation, 4, gl.FLOAT, false, stride, 0)
+        gl.vertexAttribPointer(vertexMatrixLocation + 1, 4, gl.FLOAT, false, stride, 16)
+        gl.vertexAttribPointer(vertexMatrixLocation + 2, 4, gl.FLOAT, false, stride, 32)
+        gl.vertexAttribPointer(vertexMatrixLocation + 3, 4, gl.FLOAT, false, stride, 48)
+
+        gl.enableVertexAttribArray(vertexMatrixLocation)
+        gl.enableVertexAttribArray(vertexMatrixLocation + 1)
+        gl.enableVertexAttribArray(vertexMatrixLocation + 2)
+        gl.enableVertexAttribArray(vertexMatrixLocation + 3)
+
+        const colorAttribute = gl.getAttribLocation(program, 'vertexColorOffset')
+
         gl.enableVertexAttribArray(colorAttribute)
-        gl.vertexAttribPointer(colorAttribute, 3, gl.FLOAT, true, stride, 24)
+        gl.vertexAttribPointer(colorAttribute, 3, gl.FLOAT, true, stride, 16 * STRIDE_FLOAT_BYTES)
 
-        const offsetAttribute = gl.getAttribLocation(program, 'vertexOffset')
-
-        gl.enableVertexAttribArray(offsetAttribute)
-        gl.vertexAttribPointer(offsetAttribute, 3, gl.FLOAT, false, stride, 0)
-
+        gl.vertexAttribDivisor(vertexMatrixLocation, 1)
+        gl.vertexAttribDivisor(vertexMatrixLocation + 1, 1)
+        gl.vertexAttribDivisor(vertexMatrixLocation + 2, 1)
+        gl.vertexAttribDivisor(vertexMatrixLocation + 3, 1)
         gl.vertexAttribDivisor(colorAttribute, 1)
-        gl.vertexAttribDivisor(offsetAttribute, 1)
         
-
         gl.bindVertexArray(null)
     }
 
@@ -106,7 +163,13 @@ export default class InstancedMesh extends Mesh {
     render(gl, program) {        
         gl.bindVertexArray(this._vertexArray)
         
-        gl.drawArraysInstanced(gl.TRIANGLES, 0, this.geometry.vertices.length, 2)
+        if(this.matrixAutoUpdate) {
+            this.updateMatrix()
+        }
+
+        this.material.renderTexture(gl, program, this.geometry)
+
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, this.geometry.vertices.length, this.count)
         gl.bindVertexArray(null)
     }
 }

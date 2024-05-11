@@ -87,7 +87,7 @@ export default class Engine {
         try {
             this.Renderer = new Renderer(this.gl, this.canvasElement)
             this.Scene = new Scene(this)
-            this.camera = new PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 50)
+            // this.camera = new PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 50)
 
             window.onresize = this.onresize.bind(this)
 

@@ -3,19 +3,14 @@
 // GLSL Types - https://webgl2fundamentals.org/webgl/lessons/webgl-shaders-and-glsl.html
 precision mediump float;
 
-out vec3 fragmentColor;
-
 // vertex data
 in vec3 vertexPosition;
-in vec3 vertexOffset;
+in mat4 meshMatrix;
 in vec3 vertexColor;
-
-uniform mat4 vertexRotation;
-uniform vec3 vertexRotationOffset;
-uniform vec3 meshPosition;
-uniform vec3 meshScale;
+in vec3 vertexColorOffset;
 
 // texture data
+out vec3 fragmentColor;
 in vec2 aTexCoord;
 out vec2 vTexCoord;
 
@@ -26,16 +21,12 @@ uniform mat4 viewProjection;
 uniform mat4 rotationProjectionMatrix;
 
 void main() {
-    fragmentColor = vertexColor;
+    fragmentColor = vertexColor + vertexColorOffset;
     vTexCoord = aTexCoord;
 
-    // push vertex to center -> rotated -> push back to prefered location
-    vec3 finalVertexPosition = (vertexPosition * meshScale) - vertexRotationOffset;
-    // vec3 finalVertexPosition = vertexPosition + vertexOffset;
+    vec4 finalPositionPosition = vec4(vertexPosition, 1.0);
     mat4 finalProjectedMatrix = cameraProjection * viewProjection * rotationProjectionMatrix;
-
-    vec4 finalPosition = (vertexRotation * vec4(finalVertexPosition, 1.0)) + vec4(- cameraPosition + meshPosition, 0.0);
-    // vec4 finalPosition = vec4(finalVertexPosition - cameraPosition, 1.0);
+    vec4 finalPosition = (meshMatrix * finalPositionPosition) + vec4( -cameraPosition, 0.0);
 
     gl_Position = finalProjectedMatrix * finalPosition;
 }

@@ -101,6 +101,22 @@ export default class Matrix4 {
     }
 
     /**
+     * @param {Number} x 
+     * @param {Number} y 
+     * @param {Number} z 
+     */
+    translate(x, y, z) {
+        this.set(
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            x, y, z, 1
+        )
+
+        return this
+    }
+
+    /**
      * 
      * @param {Number} x 
      * @param {Number} y 

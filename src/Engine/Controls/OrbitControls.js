@@ -34,6 +34,8 @@ export default class OrbitControls extends Controller {
     }
 
     update() {
+        if(!this.camera.target || !this.camera.target) return
+        
         if(this.mouseUp) {
             this.dragX = 0
             this.dragY = 0

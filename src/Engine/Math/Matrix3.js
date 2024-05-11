@@ -74,6 +74,18 @@ export default class Matrix3 {
     }
 
     /**
+     * @param {Number} x 
+     * @param {Number} y 
+     */
+    translate(x, y) {
+        this.set(
+            1, 0, 0,
+            0, 1, 0,
+            x, y, 1
+        )
+    }
+
+    /**
      * 
      * @param {Number} x 
      * @param {Number} y 

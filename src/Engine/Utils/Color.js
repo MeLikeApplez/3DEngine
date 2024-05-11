@@ -20,7 +20,6 @@ export default class Color {
     }
 
     /**
-     * 
      * @param {Number} hex 
      */
     setHex(hex=0) {

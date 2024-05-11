@@ -6,5 +6,7 @@ export default class InstancedBuffer {
     constructor(buffer, count) {
         this.buffer = buffer
         this.count = count
+
+        console.log(this)
     }
 }
