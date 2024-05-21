@@ -7,14 +7,23 @@ export default class PlaneGeometry extends BufferGeometry {
      */
     constructor(width, depth) {
         const vertices = [
-            // top
-            0.0, 0.0, 0.0,
-            0.0, 1.0, 0.0,
-            1.0, 0.0, 0.0,
+             //  front
+            -1.0, -1.0, 1.0,
+            -1.0, 1.0, 1.0,
+            1.0, -1.0, 1.0,
             
-            1.0, 0.0, 0.0,
-            1.0, 1.0, 0.0,
-            0.0, 1.0, 0.0,            
+            -1.0, 1.0, 1.0,
+            1.0, 1.0, 1.0,
+            1.0, -1.0, 1.0,
+
+            // back
+            1.0, -1.0, -1.0,
+            1.0, 1.0, -1.0,
+            -1.0, -1.0, -1.0,
+            
+            1.0, 1.0, -1.0,
+            -1.0, 1.0, -1.0,
+            -1.0, -1.0, -1.0,
         ]
 
         for(let i = 0; i < vertices.length; i+=3) {
@@ -22,6 +31,6 @@ export default class PlaneGeometry extends BufferGeometry {
             vertices[i + 1] *= depth
         }
 
-        super(6, true, vertices)
+        super(6, false, vertices)
     }
 }

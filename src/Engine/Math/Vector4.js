@@ -198,7 +198,6 @@ export default class Vector4 {
     }
 
     /**
-     * 
      * @param {Vector4} vector 
      */
     dot(vector) {
@@ -214,7 +213,6 @@ export default class Vector4 {
     }
 
     /**
-     * 
      * @param {Vector4} vector 
      */
     copy(vector) {

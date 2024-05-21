@@ -13,6 +13,7 @@ in vec3 vertexColorOffset;
 out vec3 fragmentColor;
 in vec2 aTexCoord;
 out vec2 vTexCoord;
+out vec3 v3TexCoord;
 
 // camera data
 uniform vec3 cameraPosition;
@@ -23,6 +24,7 @@ uniform mat4 rotationProjectionMatrix;
 void main() {
     fragmentColor = vertexColor + vertexColorOffset;
     vTexCoord = aTexCoord;
+    v3TexCoord = vertexPosition;
 
     vec4 finalPositionPosition = vec4(vertexPosition, 1.0);
     mat4 finalProjectedMatrix = cameraProjection * viewProjection * rotationProjectionMatrix;

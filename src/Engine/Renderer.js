@@ -1,9 +1,16 @@
 // https://vitejs.dev/guide/assets
-import vertexSourceCode from './gl/vertex.glsl?raw'
-import fragmentSourceCode from './gl/fragment.glsl?raw'
+import vertexSourceCode from './gl/vertex/vertex.glsl?raw'
+import backgroundVertexSourceCode from './gl/vertex/background-vertex.glsl?raw'
+
+import fragmentTexture2DSourceCode from './gl/fragment/fragmentTexture2D.glsl?raw'
+import fragmentCubeTextureSourceCode from './gl/fragment/fragmentCubeTexture.glsl?raw'
+import backgroundFragmentSourceCode from './gl/fragment/background-fragment.glsl?raw'
 
 import Mesh from './Meshes/Mesh'
 import Camera from './Camera/Camera'
+import CubeTextureLoader from './Texture/CubeTextureLoader'
+import Scene from './Scene'
+import { BACK, CUBE_TEXTURE, FRONT, FRONT_AND_BACK, TEXTURE_2D } from './Utils/Constants'
 
 export default class Renderer {
     /**
@@ -14,11 +21,14 @@ export default class Renderer {
         this.gl = gl
         this.canvasElement = canvas
 
-        this.program = this.createGLProgram(vertexSourceCode, fragmentSourceCode)
+        this.programTexture2D = this.createGLProgram(vertexSourceCode, fragmentTexture2DSourceCode)
+        this.programCubeTexture = this.createGLProgram(vertexSourceCode, fragmentCubeTextureSourceCode)
+        this.backgroundProgram = this.createGLProgram(backgroundVertexSourceCode, backgroundFragmentSourceCode)
 
         // Tell WebGL to test the depth when drawing, so if a square is behind
         // another square it won't be drawn
         this.gl.enable(this.gl.DEPTH_TEST)
+        this.gl.enable(this.gl.CULL_FACE)
     }
     
     createGLProgram(vertexSource, shaderSource) {
@@ -91,15 +101,73 @@ export default class Renderer {
         this.gl.uniform3f(cameraPositionLocation, camera.position.x, camera.position.y, camera.position.z)
     }
 
+    updateSceneBackground(Scene) {
+        Scene.background._vertexArray = this.gl.createVertexArray()
+        // this.gl.bindVertexArray(Scene.background._vertexArray)
+
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, Scene.background._vertexBuffer)
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, Scene.background._vertex, this.gl.STATIC_DRAW)
+    
+        const vertexLocation = this.gl.getAttribLocation(this.backgroundProgram, 'vertexPosition')
+
+        this.gl.vertexAttribPointer(vertexLocation, 3, this.gl.FLOAT, false, 0, 0)
+        this.gl.enableVertexAttribArray(vertexLocation)
+
+        this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, false)
+
+        for(let i = 0; i < Scene.background.img.length; i++) {
+            const img = Scene.background.img[i]
+            
+            const target = this.gl[img.texture]
+
+            this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP, Scene.background._textureBuffer)
+            this.gl.texImage2D(target, 0, this.gl.RGB, this.gl.RGB, this.gl.UNSIGNED_BYTE, img.img)
+        }
+
+        this.gl.generateMipmap(this.gl.TEXTURE_CUBE_MAP)
+        this.gl.texParameteri(this.gl.TEXTURE_CUBE_MAP, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR)
+
+        // const skyboxLocation = this.gl.getUniformLocation(this.backgroundProgram, 'skybox')
+        
+        // this.gl.uniform1i(skyboxLocation, 0)
+
+        this.gl.drawArrays(this.gl.TRIANGLES, 0, Scene.background._vertex.length)
+
+        this.gl.bindVertexArray(null)
+    }
+
     /**
+     * @param {Scene} scene 
      * @param {Mesh[]} meshes 
      * @param {Camera} camera 
      */
-    update(meshes, camera) {
-        this.gl.useProgram(this.program)
-        this.updateProgramUniforms(this.program, camera)
-        
+    update(Scene, meshes, camera) {
         this.clear()
+
+        if(Scene.background && Scene.background.ready) {
+            // disable depth test
+            this.gl.depthMask(false)
+            this.gl.depthFunc(this.gl.LEQUAL)
+            this.gl.cullFace(this.gl.BACK)
+
+            this.gl.useProgram(this.backgroundProgram)
+            this.updateProgramUniforms(this.backgroundProgram, camera)
+
+            this.gl.viewport(0, 0, this.canvasElement.width, this.canvasElement.height)
+
+            this.updateSceneBackground(Scene)
+        }
+
+        // re-enable depth test
+        this.gl.depthMask(true)
+        this.gl.depthFunc(this.gl.LESS)
+        this.gl.cullFace(this.gl.FRONT)
+        
+        this.gl.useProgram(this.programCubeTexture)
+        this.updateProgramUniforms(this.programCubeTexture, camera)
+
+        this.gl.useProgram(this.programTexture2D)
+        this.updateProgramUniforms(this.programTexture2D, camera)
         
         // rasterizer
         this.gl.viewport(0, 0, this.canvasElement.width, this.canvasElement.height)
@@ -107,7 +175,47 @@ export default class Renderer {
         for(let i = 0; i < meshes.length; i++) {
             const mesh = meshes[i]
 
-            mesh.render(this.gl, this.program)
+            switch(mesh.side) {
+                case FRONT: {
+                    this.gl.cullFace(this.gl.FRONT)
+
+                    break
+                }
+                case BACK: {
+                    this.gl.cullFace(this.gl.BACK)
+
+                    break
+                }
+                case FRONT_AND_BACK: {
+                    this.gl.cullFace(this.gl.FRONT_AND_BACK)
+
+                    break
+                }
+                default: {
+                    this.gl.cullFace(this.gl.FRONT)
+                }
+            }
+
+            if(!mesh.material.texture) {
+                this.gl.useProgram(this.programTexture2D)
+                mesh.render(this.gl, this.programTexture2D)
+
+                continue
+            }
+
+            switch(mesh.material.texture.type) {
+                case CUBE_TEXTURE: {
+                    this.gl.useProgram(this.programCubeTexture)
+                    mesh.render(this.gl, this.programCubeTexture)
+
+                    break
+                }
+                default: {
+                    this.gl.useProgram(this.programTexture2D)
+                    mesh.render(this.gl, this.programTexture2D)
+                }
+            }
+
         }
     }
 }

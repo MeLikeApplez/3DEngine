@@ -2,6 +2,8 @@ import PerspectiveCamera from "./Camera/Perspective"
 import Renderer from "./Renderer"
 import Scene from "./Scene"
 
+import * as Constants from './Utils/Constants.js'
+
 export default class Engine {
     constructor(canvas, { controller, ERROR_SCREEN }={}) {
         this.canvasElement = canvas
@@ -21,6 +23,7 @@ export default class Engine {
 
         this._events = new Map()
 
+        this.Constants = Constants
         this.ready = false
 
         this.createEvent('update')

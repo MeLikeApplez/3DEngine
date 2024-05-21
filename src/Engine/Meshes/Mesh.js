@@ -4,8 +4,9 @@ import * as uuid from 'uuid'
 import Color from '../Utils/Color'
 import Vector3 from '../Math/Vector3'
 import Euler from '../Math/Euler'
-import TextureLoader from '../Texture/TextureLoader'
+import TextureLoader from '../Texture/Texture2DLoader'
 import Matrix4 from '../Math/Matrix4'
+import { CUBE_TEXTURE, FRONT, TEXTURE_2D } from '../Utils/Constants'
 
 export default class Mesh {
     /**
@@ -27,6 +28,8 @@ export default class Mesh {
 
         this.isMesh = true
         this.isInstancedMesh = false
+
+        this.side = FRONT
 
         this.uuid = uuid.v4()
         this._vertexArray = null
@@ -61,7 +64,7 @@ export default class Mesh {
         gl.deleteVertexArray(this._vertexArray)
         gl.deleteBuffer(this._matrixBuffer)
 
-        this.updateMatrix()
+        this.updateMatrix(gl, program)
 
         // VAO's only work on vertex buffers / color vertex buffers, NOT TEXTURES
         this._vertexArray = gl.createVertexArray()
@@ -96,7 +99,11 @@ export default class Mesh {
         gl.bindVertexArray(null)
     }
 
-    updateMatrix() {
+    /**
+     * @param {WebGL2RenderingContext} gl 
+     * @param {WebGLProgram} program 
+     */
+    updateMatrix(gl, program) {
         this.matrix.makeRotationFromEuler(this.rotation)
 
         // https://stackoverflow.com/a/37281018/13159492
@@ -123,11 +130,12 @@ export default class Mesh {
      * @param {WebGLProgram} program 
      */
     render(gl, program) {
-        gl.bindVertexArray(this._vertexArray)
-
         if(this.matrixAutoUpdate) {
-            this.updateMatrix()
+            // this.updateMatrix(gl, program)
+            this.update(gl, program)
         }
+        
+        gl.bindVertexArray(this._vertexArray)
         
         this.material.renderTexture(gl, program, this.geometry)
         
@@ -316,7 +324,7 @@ export class BufferMeshMaterial {
      * @param {BufferGeometry} geometry 
      */
     load(gl, program, geometry) {
-        this.dispose(gl)
+        // this.dispose(gl)
 
         if(this.colorVertices.length <= 0) {
             this.setColorVertices(geometry)
@@ -350,7 +358,7 @@ export class BufferMeshMaterial {
         if(this.textureVertices.length <= 0) {
             this.setTextureVertices(geometry)
         }
-
+        
         if(!this._textureBuffer) {
             this.setTextureBuffer(gl)
         }
@@ -365,14 +373,69 @@ export class BufferMeshMaterial {
         gl.vertexAttribPointer(this._textureAttribute, 2, gl.FLOAT, false, 0, 0)
         gl.enableVertexAttribArray(this._textureAttribute)
         
-        if(this.texture && this.texture.ready) {
-            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+        // support cube map needed
+        if(this.texture) {
+            if(this.texture.ready) {
+                switch(this.texture.type) {
+                    case TEXTURE_2D: {
+                        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+        
+                        gl.bindTexture(gl.TEXTURE_2D, this._textureBufferImg)
+                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, this.texture.img)
+                
+                        gl.generateMipmap(gl.TEXTURE_2D)
+                        
+                        break
+                    }
+                    case CUBE_TEXTURE: {
+                        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
     
-            gl.bindTexture(gl.TEXTURE_2D, this._textureBufferImg)
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, this.texture.img)
+                        for(let i = 0; i < this.texture.img.length; i++) {
+                            const img = this.texture.img[i]
+                            
+                            const target = gl[img.texture]
     
-            gl.generateMipmap(gl.TEXTURE_2D)            
-        } else {
+                            gl.bindTexture(gl.TEXTURE_CUBE_MAP, this._textureBufferImg)
+                            gl.texImage2D(target, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img.img)
+                        }
+                
+                        gl.generateMipmap(gl.TEXTURE_CUBE_MAP)
+                        gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+    
+                        break
+                    }
+                    default: throw Error('Invalid texture loader')
+                }
+            } else {
+                switch(this.texture.type) {
+                    case TEXTURE_2D: {
+                        // create an empty color texture
+                        gl.bindTexture(gl.TEXTURE_2D, this._textureBufferImg)
+                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array(3))
+    
+                        break
+                    }
+                    case CUBE_TEXTURE: {
+                        // create an empty color cube texture
+                        // gl.bindTexture(gl.TEXTURE_CUBE_MAP, this._textureBufferImg)
+
+                        // gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, null)
+                        // gl.texImage2D(gl.TEXTURE_CUBE_MAP_NEGATIVE_X, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, null)
+                        
+                        // gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_Y, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, null)
+                        // gl.texImage2D(gl.TEXTURE_CUBE_MAP_NEGATIVE_Y, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, null)
+
+                        // gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_Z, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, null)
+                        // gl.texImage2D(gl.TEXTURE_CUBE_MAP_NEGATIVE_Z, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, null)
+
+                        // gl.generateMipmap(gl.TEXTURE_CUBE_MAP)
+                        // gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+
+                        break
+                    }
+                }
+            }
+        }  else {
             // create an empty color texture
             gl.bindTexture(gl.TEXTURE_2D, this._textureBufferImg)
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array(3))

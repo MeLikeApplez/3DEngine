@@ -4,7 +4,6 @@ import Vector4 from '../../Math/Vector4'
 import Color from '../../Utils/Color'
 
 import Mesh from '../Mesh'
-import InstancedBuffer from './InstancedBuffer'
 
 // stride => (4 bytes per float)
 // first row => (9 floats) => (9 floats * 4 bytes) => 36 stride
@@ -21,7 +20,7 @@ export default class InstancedMesh extends Mesh {
 
         this.isMesh = false
         this.isInstancedMesh = true
-
+        
         this.count = count
         /**
          * @type {ArrayBuffer[3]}
@@ -49,38 +48,6 @@ export default class InstancedMesh extends Mesh {
         this._transformBuffer = null
 
         return true
-    }
-
-    /**
-     * @param {Number} index 
-     * @param {Color} color 
-     */
-    getColorAt(index, color) {
-
-    }
-
-    /**
-     * @param {Number} index 
-     * @param {Matrix4} matrix 
-     */
-    getMatrixAt(index, matrix) {
-
-    }
-
-    /**
-     * @param {Number} index 
-     * @param {Color} color 
-     */
-    setColorAt(index, color) {
-
-    }
-
-    /**
-     * @param {Number} index 
-     * @param {Matrix4} matrix 
-     */
-    setMatrixAt(index, color) {
-
     }
 
     initialize() {
